@@ -279,12 +279,12 @@ collabcode/
 └── .env
 ```
 
-### Step 2 — Create your .env file
+### Step 2 - Create your .env file
 
 
 Fill in your credentials (see Environment Variables below).
 
-### Step 3 — Start the backend
+### Step 3 - Start the backend
 
 ```bash
 docker compose up --build
@@ -299,7 +299,7 @@ Wait until you see:
 [worker-3] Ready — supporting 18 languages
 ```
 
-### Step 4 — Start the frontend
+### Step 4 - Start the frontend
 
 Open a new terminal:
 
@@ -400,26 +400,26 @@ The Vite dev server hot-reloads automatically. Just save the file.
 
 To run each component on a separate machine on the same WiFi or LAN network:
 
-Machine 1 — Redis only:
+Machine 1 - Redis only:
 ```bash
 docker run -p 6379:6379 redis:7-alpine redis-server --appendonly yes
 ```
 Note its IP, for example 192.168.1.2
 
-Machine 2 — Server only:
+Machine 2 - Server only:
 Set REDIS_URL=redis://192.168.1.2:6379 in the server environment and run:
 ```bash
 docker compose up server --build
 ```
 Note its IP, for example 192.168.1.3
 
-Machine 3, 4, 5 — One worker each:
+Machine 3, 4, 5 - One worker each:
 Set REDIS_URL=redis://192.168.1.2:6379 and SERVER_URL=http://192.168.1.3:3001 and run:
 ```bash
 docker compose up worker1 --build
 ```
 
-Client machines — update the server URL in the client:
+Client machines - update the server URL in the client:
 ```js
 // client/src/pages/Editor.jsx and Lobby.jsx — change this line:
 const SERVER = "http://192.168.1.3:3001";
@@ -429,63 +429,3 @@ Then run npm run dev on each client machine.
 
 ---
 
-## How It Works Internally
-
-### Real-time collaborative editing
-
-Every keystroke is converted into a Yjs CRDT update — a compact binary object describing the change with a unique ID and causal metadata. This update is sent via Socket.IO to the server, which applies it to its server-side Yjs document replica and broadcasts the binary update to all other clients in the room. Each client independently applies the update. If two users type at the same position simultaneously, Yjs's YATA (Yet Another Transformation Approach) algorithm deterministically resolves the conflict — every client arrives at the same result without a coordination round-trip.
-
-Each language has its own independent Y.Doc on both the client and server. Switching languages reconnects to that language's document channel.
-
-### Code execution pipeline
-
-1. User clicks Run — Socket.IO event sent to server — server pushes a BullMQ job to Redis
-2. A worker pulls the job (one at a time per worker process)
-3. Worker calls Dockerode to create a container with the correct language image
-4. Code is passed as the CODE environment variable — the container writes it to a file internally and executes it
-5. Container stdout is streamed chunk by chunk — each chunk is POSTed to /output on the server — server emits execution:output to all clients in the room
-6. Container is auto-removed after execution finishes
-7. If the worker crashes mid-execution, BullMQ marks the job as stalled and re-queues it automatically
-
-No bind mounts are used. The code-as-env-var approach works on all platforms including Windows with Docker Desktop.
-
-### Room lifecycle
-
-Rooms are created in server memory when the first user joins. A 10-minute cleanup timer starts when the last user leaves. If no one rejoins in that time, the room state is deleted. The 6-character code remains valid while the server is running.
-
----
-
-## Troubleshooting
-
-**docker compose up fails with port already allocated**
-
-Run docker compose down first, then check what is using the port:
-```bash
-# On Windows PowerShell:
-netstat -ano | findstr :6379
-# Kill by PID or change the Redis port in docker-compose.yml to "6380:6379"
-```
-
-**AI says "AI not configured"**
-
-Check that OPENAI_API_KEY is set in .env and that you ran docker compose down followed by docker compose up --build after editing the file. The server prints [AI] enabled on startup if the key is loaded.
-
-**AI says "Could not reach server"**
-
-Make sure docker compose up is running. Check server logs with docker compose logs server.
-
-**Code execution fails with "No such image"**
-
-The language Docker image needs to be pulled. Run docker pull python:3.11-slim (or whichever language failed), or just try running again — workers pull images automatically on first use.
-
-**Changes to .env have no effect**
-
-You must restart Docker: docker compose down then docker compose up --build. Restarting only the frontend has no effect on server-side environment variables.
-
-**Room not found when joining**
-
-The room creator must enter the room first. The room only exists in memory while at least one user is connected, or within 10 minutes of the last user leaving.
-
-**Profile picture upload fails**
-
-Check your Cloudinary credentials in .env. Without valid credentials the app uses initials avatars as fallback — all other features still work normally.
