@@ -53,7 +53,7 @@ export default function Editor({ roomCode, userInfo, onLeave }) {
   const applyingRef  = useRef(false);
   const cursorTimers = useRef({});
   const cursorLabels = useRef({});
-
+  const runnerRef = useRef("");
   const yjs = useYjs();
 
   const seedSnippet = useCallback((l) => {
@@ -125,12 +125,29 @@ export default function Editor({ roomCode, userInfo, onLeave }) {
       if (editorRef.current && user.line) renderCursorLabel(user);
     });
 
-    socket.on("chat:message",     msg => setMessages(prev => [...prev, msg]));
-    socket.on("execution:queued", ({ jobId }) => setOutput(prev => [...prev, { type: "info", text: `Job ${jobId} queued…` }]));
-    socket.on("execution:output", ({ output: txt, done }) => {
-      if (txt) setOutput(prev => [...prev, { type: "out", text: txt }]);
-      if (done) setIsRunning(false);
-    });
+   socket.on("chat:message", msg => setMessages(prev => [...prev, msg]));
+
+socket.on("execution:started", ({ runnerName, language }) => {
+  runnerRef.current = runnerName;
+  setOutput([]);
+  setIsRunning(true);
+});
+
+socket.on("execution:queued", ({ jobId }) => {
+  setOutput(prev => [...prev, { type: "info", text: `${runnerRef.current || "Someone"}'s job queued…` }]);
+});
+
+socket.on("execution:output", ({ output: txt, done }) => {
+  if (txt) {
+    const prefix = runnerRef.current ? `${runnerRef.current} ⟶ ` : "";
+    setOutput(prev => [
+      ...prev,
+      { type: "out", text: `${prefix}${txt}`, runner: runnerRef.current }
+    ]);
+    runnerRef.current = ""; // only prefix first line
+  }
+  if (done) setIsRunning(false);
+});
 
     return () => socket.disconnect();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -207,8 +224,6 @@ export default function Editor({ roomCode, userInfo, onLeave }) {
   const handleRun = useCallback(() => {
     const code = editorRef.current?.getModel()?.getValue() || "";
     if (!code.trim() || !socketRef.current) return;
-    setOutput([{ type: "info", text: `Running ${lang}…` }]);
-    setIsRunning(true);
     socketRef.current.emit("execution:run", { code, language: lang });
   }, [lang]);
 
