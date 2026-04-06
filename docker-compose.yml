@@ -6,51 +6,67 @@ services:
     volumes:
       - redis-data:/data
     command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
-  relay:
-    build: ./relay-server
+  server:
+    build: ./server
     ports:
-      - "1234:1234"
+      - "3001:3001"
     environment:
       - REDIS_URL=redis://redis:6379
+      - PORT=3001
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - AI_MODEL=${AI_MODEL:-gpt-4o-mini}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
+    volumes:
+      - uploads:/app/uploads
 
   worker1:
     build: ./worker
     environment:
       - REDIS_URL=redis://redis:6379
-      - RELAY_URL=http://relay:1234
+      - SERVER_URL=http://server:3001
       - WORKER_ID=worker-1
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
-      - redis
-      - relay
+      redis:
+        condition: service_healthy
 
   worker2:
     build: ./worker
     environment:
       - REDIS_URL=redis://redis:6379
-      - RELAY_URL=http://relay:1234
+      - SERVER_URL=http://server:3001
       - WORKER_ID=worker-2
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
-      - redis
-      - relay
+      redis:
+        condition: service_healthy
 
   worker3:
     build: ./worker
     environment:
       - REDIS_URL=redis://redis:6379
-      - RELAY_URL=http://relay:1234
+      - SERVER_URL=http://server:3001
       - WORKER_ID=worker-3
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
-      - redis
-      - relay
+      redis:
+        condition: service_healthy
 
 volumes:
   redis-data:
+  uploads:
