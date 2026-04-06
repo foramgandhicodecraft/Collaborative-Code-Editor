@@ -1,6 +1,6 @@
 import React from "react";
 import clsx from "clsx";
-
+import { useState } from "react";
 export const LANGUAGES = [
   { id: "python",     label: "Python"     },
   { id: "javascript", label: "JavaScript" },
@@ -28,7 +28,7 @@ export default function Toolbar({
   chatOpen, sidebarOpen, onLeave, userInfo, onToggleAI, aiOpen,
 }) {
   const dark = theme === "dark";
-
+  const [toolbarCopied, setToolbarCopied] = useState(false);
   return (
     <header className={clsx(
       "flex items-center gap-1.5 px-3 h-12 border-b flex-shrink-0 z-20",
@@ -48,17 +48,36 @@ export default function Toolbar({
       </div>
 
       {/* Room badge */}
-      <div className={clsx(
-        "flex items-center gap-1.5 rounded-md px-2 py-1 border flex-shrink-0",
-        dark ? "bg-gray-800 border-gray-700" : "bg-gray-100 border-gray-200"
-      )}>
-        <span className={clsx("text-xs", dark ? "text-gray-400" : "text-gray-500")}>Room</span>
-        <span className="text-xs font-mono font-bold text-blue-400 tracking-wider">{roomCode}</span>
-        <div className={clsx(
-          "w-1.5 h-1.5 rounded-full flex-shrink-0",
-          connected ? "bg-green-400" : "bg-red-400 animate-pulse"
-        )} />
-      </div>
+     <div className={clsx(
+          "flex items-center gap-1.5 rounded-md px-2 py-1 border flex-shrink-0",
+          dark ? "bg-gray-800 border-gray-700" : "bg-gray-100 border-gray-200"
+        )}>
+          <span className={clsx("text-xs", dark ? "text-gray-400" : "text-gray-500")}>Room</span>
+          <span className="text-xs font-mono font-bold text-blue-400 tracking-wider">{roomCode}</span>
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(roomCode);
+              setToolbarCopied(true);
+              setTimeout(() => setToolbarCopied(false), 2000);
+            }}
+            className="text-gray-500 hover:text-blue-400 transition-colors"
+            title="Copy room code"
+          >
+            {toolbarCopied ? (
+              <svg className="w-3 h-3 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            ) : (
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+            )}
+          </button>
+          <div className={clsx(
+            "w-1.5 h-1.5 rounded-full flex-shrink-0",
+            connected ? "bg-green-400" : "bg-red-400 animate-pulse"
+          )} />
+        </div>
 
       <div className={clsx("w-px h-5 mx-0.5 flex-shrink-0", dark ? "bg-gray-700" : "bg-gray-200")} />
 

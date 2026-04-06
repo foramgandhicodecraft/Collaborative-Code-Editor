@@ -17,6 +17,7 @@ export default function Lobby({ onJoin }) {
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState("");
   const [generatedCode, setGeneratedCode] = useState("");
+  const [copied, setCopied] = useState(false);
   const fileRef = useRef();
 
   const myColor = useRef(USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)]);
@@ -164,7 +165,26 @@ export default function Lobby({ onJoin }) {
                 </button>
               ) : (
                 <div className="space-y-3">
-                  <div className="bg-gray-800 rounded-xl p-4 text-center border border-gray-700">
+                  <div className="bg-gray-800 rounded-xl p-4 text-center border border-gray-700 relative">
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(generatedCode);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      }}
+                      className="absolute top-2 right-2 p-1.5 rounded-md text-gray-500 hover:text-blue-400 hover:bg-gray-700 transition-all"
+                      title="Copy code"
+                    >
+                      {copied ? (
+                        <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                      )}
+                    </button>
                     <p className="text-xs text-gray-500 mb-2 uppercase tracking-wide font-medium">Share this code</p>
                     <p className="text-3xl font-bold tracking-[0.3em] text-blue-400 font-mono">{generatedCode}</p>
                     <p className="text-xs text-gray-500 mt-2">Others can join with this code</p>
