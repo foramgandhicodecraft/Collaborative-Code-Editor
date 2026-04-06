@@ -1,6 +1,6 @@
 # CollabCode
 
-> A production-ready, real-time collaborative code editor with AI assistance, room-based sessions, multi-language execution, and live chat — built on a fully distributed architecture.
+> A production-ready, real-time collaborative code editor with AI assistance, room-based sessions, multi-language execution, and live chat - built on a fully distributed architecture.
 
 ---
 
@@ -276,14 +276,11 @@ collabcode/
 ├── worker/
 ├── client/
 ├── docker-compose.yml
-└── .env.example
+└── .env
 ```
 
 ### Step 2 — Create your .env file
 
-```bash
-cp .env.example .env
-```
 
 Fill in your credentials (see Environment Variables below).
 
