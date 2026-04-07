@@ -11,7 +11,6 @@ import AiPanel from "../components/AiPanel.jsx";
 
 const SERVER = "http://localhost:3001";
 
-// Starter snippets for every language in the full list
 const SNIPPETS = {
   python:     'print("Hello from Python!")',
   javascript: 'console.log("Hello from JavaScript!");',
@@ -45,7 +44,7 @@ export default function Editor({ roomCode, userInfo, onLeave }) {
   const [aiOpen, setAiOpen]           = useState(false);
   const [connected, setConnected]     = useState(false);
   const [awareness, setAwareness]     = useState({});
-  const [editorCode, setEditorCode]   = useState(""); // mirror for AI context
+  const [editorCode, setEditorCode]   = useState("");
 
   const socketRef    = useRef(null);
   const langRef      = useRef(lang);
@@ -53,12 +52,16 @@ export default function Editor({ roomCode, userInfo, onLeave }) {
   const applyingRef  = useRef(false);
   const cursorTimers = useRef({});
   const cursorLabels = useRef({});
-  const runnerRef = useRef("");
+  const runnerRef    = useRef("");
+
   const yjs = useYjs();
 
   const seedSnippet = useCallback((l) => {
     if (yjs.getContent(l) === "") {
+      const before = yjs.encodeStateVector(l);
       yjs.setContent(l, SNIPPETS[l] || `// Start coding in ${l}...`);
+      const update = yjs.encodeUpdate(l, before);
+      socketRef.current?.emit("yjs:update", { lang: l, update });
     }
   }, [yjs]);
 
@@ -69,7 +72,6 @@ export default function Editor({ roomCode, userInfo, onLeave }) {
 
     socket.on("connect", () => {
       setConnected(true);
-      seedSnippet("python");
       socket.emit("room:join", {
         roomId: roomCode, name: userInfo.name,
         avatarUrl: userInfo.avatarUrl, color: userInfo.color,
@@ -84,18 +86,17 @@ export default function Editor({ roomCode, userInfo, onLeave }) {
       socket.emit("yjs:request-state", { lang: langRef.current });
     });
 
-    socket.on("room:users",       setUsers);
+    socket.on("room:users", setUsers);
     socket.on("room:user-joined", user => setUsers(prev => [...prev.filter(u => u.id !== user.id), user]));
     socket.on("room:user-left", id => {
       setUsers(prev => prev.filter(u => u.id !== id));
-      setAwareness(prev => { const n = {...prev}; delete n[id]; return n; });
+      setAwareness(prev => { const n = { ...prev }; delete n[id]; return n; });
       if (cursorLabels.current[id]) { cursorLabels.current[id].remove(); delete cursorLabels.current[id]; }
     });
 
     socket.on("yjs:update", ({ lang: l, update }) => {
       applyingRef.current = true;
       yjs.applyUpdate(l, update);
-      applyingRef.current = false;
       if (l === langRef.current && editorRef.current) {
         const txt = yjs.getContent(l);
         const mdl = editorRef.current.getModel();
@@ -105,19 +106,29 @@ export default function Editor({ roomCode, userInfo, onLeave }) {
           if (pos) editorRef.current.setPosition(pos);
         }
       }
+      setTimeout(() => { applyingRef.current = false; }, 0);
     });
 
     socket.on("yjs:state", ({ lang: l, state }) => {
       applyingRef.current = true;
       yjs.applyUpdate(l, state);
-      applyingRef.current = false;
-      if (l === langRef.current && editorRef.current) {
-        const txt = yjs.getContent(l);
-        if (txt && editorRef.current.getModel()?.getValue() !== txt) {
-          editorRef.current.getModel()?.setValue(txt);
-          setEditorCode(txt);
-        }
+      const txt = yjs.getContent(l);
+
+      if (!txt && l === langRef.current) {
+        // Server has no content — seed with snippet
+        const before = yjs.encodeStateVector(l);
+        yjs.setContent(l, SNIPPETS[l] || `// Start coding in ${l}...`);
+        const update = yjs.encodeUpdate(l, before);
+        socketRef.current?.emit("yjs:update", { lang: l, update });
+        const seeded = yjs.getContent(l);
+        editorRef.current?.getModel()?.setValue(seeded);
+        setEditorCode(seeded);
+      } else if (txt && l === langRef.current && editorRef.current) {
+        editorRef.current.getModel()?.setValue(txt);
+        setEditorCode(txt);
       }
+
+      setTimeout(() => { applyingRef.current = false; }, 0);
     });
 
     socket.on("awareness:update", (user) => {
@@ -125,29 +136,29 @@ export default function Editor({ roomCode, userInfo, onLeave }) {
       if (editorRef.current && user.line) renderCursorLabel(user);
     });
 
-   socket.on("chat:message", msg => setMessages(prev => [...prev, msg]));
+    socket.on("chat:message", msg => setMessages(prev => [...prev, msg]));
 
-socket.on("execution:started", ({ runnerName, language }) => {
-  runnerRef.current = runnerName;
-  setOutput([]);
-  setIsRunning(true);
-});
+    socket.on("execution:started", ({ runnerName }) => {
+      runnerRef.current = runnerName;
+      setOutput([]);
+      setIsRunning(true);
+    });
 
-socket.on("execution:queued", ({ jobId }) => {
-  setOutput(prev => [...prev, { type: "info", text: `${runnerRef.current || "Someone"}'s job queued…` }]);
-});
+    socket.on("execution:queued", () => {
+      setOutput(prev => [...prev, { type: "info", text: `${runnerRef.current || "Someone"}'s job queued…` }]);
+    });
 
-socket.on("execution:output", ({ output: txt, done }) => {
-  if (txt) {
-    const prefix = runnerRef.current ? `${runnerRef.current} ⟶ ` : "";
-    setOutput(prev => [
-      ...prev,
-      { type: "out", text: `${prefix}${txt}`, runner: runnerRef.current }
-    ]);
-    runnerRef.current = ""; // only prefix first line
-  }
-  if (done) setIsRunning(false);
-});
+    socket.on("execution:output", ({ output: txt, done }) => {
+      if (txt) {
+        const prefix = runnerRef.current ? `${runnerRef.current} ⟶ ` : "";
+        setOutput(prev => [
+          ...prev,
+          { type: "out", text: `${prefix}${txt}` },
+        ]);
+        runnerRef.current = "";
+      }
+      if (done) setIsRunning(false);
+    });
 
     return () => socket.disconnect();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -155,7 +166,7 @@ socket.on("execution:output", ({ output: txt, done }) => {
 
   // ── Language switch ───────────────────────────────────────────────────────
   const handleLangChange = useCallback((newLang) => {
-    if (!LANGUAGES.find(l => l.id === newLang)) return; // guard invalid
+    if (!LANGUAGES.find(l => l.id === newLang)) return;
     if (editorRef.current) {
       yjs.setContent(langRef.current, editorRef.current.getModel()?.getValue() || "");
     }
@@ -167,8 +178,8 @@ socket.on("execution:output", ({ output: txt, done }) => {
     if (editorRef.current) {
       applyingRef.current = true;
       editorRef.current.getModel()?.setValue(content);
-      applyingRef.current = false;
       setEditorCode(content);
+      setTimeout(() => { applyingRef.current = false; }, 0);
     }
 
     socketRef.current?.emit("yjs:request-state", { lang: newLang });
@@ -210,7 +221,7 @@ socket.on("execution:output", ({ output: txt, done }) => {
     const el = document.createElement("div");
     el.className     = "cursor-label";
     el.textContent   = user.name;
-    el.style.cssText = `background:${user.color};top:${top}px;left:${layout.contentLeft+6}px;`;
+    el.style.cssText = `background:${user.color};top:${top}px;left:${layout.contentLeft + 6}px;`;
     container.appendChild(el);
     cursorLabels.current[user.id] = el;
     clearTimeout(cursorTimers.current[user.id]);
@@ -298,7 +309,6 @@ socket.on("execution:output", ({ output: txt, done }) => {
           />
         )}
 
-        {/* AI panel — separate column on the far right */}
         <AiPanel
           theme={theme}
           currentCode={editorCode}
