@@ -2,7 +2,7 @@ import React, { useState, useRef } from "react";
 import { nanoid } from "nanoid";
 import clsx from "clsx";
 
-const SERVER = "http://localhost:3001";
+import { SERVER_URL } from "../config/server.js";
 const USER_COLORS = [
   "#f87171","#fb923c","#facc15","#4ade80",
   "#34d399","#38bdf8","#818cf8","#e879f9",

@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import clsx from "clsx";
-
-const SERVER = "http://localhost:3001";
+import { SERVER_URL } from "../config/server.js";
 
 // Simple markdown-lite renderer — handles code blocks and bold
 function MsgContent({ text }) {
@@ -76,7 +75,7 @@ export default function AiPanel({ theme, currentCode, currentLang, open, onClose
     setError("");
 
     try {
-      const res = await fetch(`${SERVER}/ai/chat`, {
+      const res = await fetch(`${SERVER_URL}/ai/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

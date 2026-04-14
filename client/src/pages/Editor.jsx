@@ -9,7 +9,7 @@ import ChatPanel from "../components/ChatPanel.jsx";
 import UsersSidebar from "../components/UsersSidebar.jsx";
 import AiPanel from "../components/AiPanel.jsx";
 
-const SERVER = "http://localhost:3001";
+import { SERVER_URL } from "../config/server.js";
 
 const SNIPPETS = {
   python:     'print("Hello from Python!")',
