@@ -34,7 +34,7 @@ export default function Lobby({ onJoin }) {
     try {
       const fd = new FormData();
       fd.append("avatar", avatarFile);
-      const res  = await fetch(`${SERVER}/upload-avatar`, { method: "POST", body: fd });
+      const res  = await fetch(`${SERVER_URL}/upload-avatar`, { method: "POST", body: fd });
       const data = await res.json();
       return data.url || null;
     } catch {
@@ -46,7 +46,7 @@ export default function Lobby({ onJoin }) {
     if (!name.trim()) { setError("Please enter your name."); return; }
     setLoading(true); setError("");
     try {
-      const res  = await fetch(`${SERVER}/create-room`, { method: "POST" });
+      const res  = await fetch(`${SERVER_URL}/create-room`, { method: "POST" });
       const data = await res.json();
       const code = data.code;
       setGeneratedCode(code);
@@ -76,7 +76,7 @@ export default function Lobby({ onJoin }) {
     if (joinCode.length < 6){ setError("Enter a 6-character room code."); return; }
     setLoading(true); setError("");
     try {
-      const res  = await fetch(`${SERVER}/room/${joinCode.toUpperCase()}`);
+      const res  = await fetch(`${SERVER_URL}/room/${joinCode.toUpperCase()}`);
       const data = await res.json();
       if (!data.exists) { setError("Room not found or is empty."); setLoading(false); return; }
       await handleEnter(joinCode);

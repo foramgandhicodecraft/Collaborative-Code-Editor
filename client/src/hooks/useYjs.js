@@ -1,18 +1,26 @@
 import { useRef, useCallback } from "react";
 import * as Y from "yjs";
 
-// One Y.Doc per language, keyed by language name
+// One Y.Doc per room and language, keyed by room id then language name.
 const globalDocs = {};
 
-export function useYjs() {
+export function useYjs(roomId = "default") {
   const docsRef = useRef(globalDocs);
 
-  const getDoc = useCallback((lang) => {
-    if (!docsRef.current[lang]) {
-      docsRef.current[lang] = new Y.Doc();
+  const getRoomDocs = useCallback(() => {
+    if (!docsRef.current[roomId]) {
+      docsRef.current[roomId] = {};
     }
-    return docsRef.current[lang];
-  }, []);
+    return docsRef.current[roomId];
+  }, [roomId]);
+
+  const getDoc = useCallback((lang) => {
+    const roomDocs = getRoomDocs();
+    if (!roomDocs[lang]) {
+      roomDocs[lang] = new Y.Doc();
+    }
+    return roomDocs[lang];
+  }, [getRoomDocs]);
 
   const getText = useCallback((lang) => {
     return getDoc(lang).getText("code");
@@ -39,9 +47,36 @@ export function useYjs() {
   const setContent = useCallback((lang, content) => {
     const doc  = getDoc(lang);
     const text = doc.getText("code");
+    const prev = text.toString();
+    if (prev === content) return;
+
+    // Apply a minimal contiguous diff so concurrent edits can merge cleanly.
+    let start = 0;
+    while (
+      start < prev.length &&
+      start < content.length &&
+      prev[start] === content[start]
+    ) {
+      start++;
+    }
+
+    let prevEnd = prev.length - 1;
+    let nextEnd = content.length - 1;
+    while (
+      prevEnd >= start &&
+      nextEnd >= start &&
+      prev[prevEnd] === content[nextEnd]
+    ) {
+      prevEnd--;
+      nextEnd--;
+    }
+
+    const deleteCount = prevEnd >= start ? (prevEnd - start + 1) : 0;
+    const insertText = nextEnd >= start ? content.slice(start, nextEnd + 1) : "";
+
     doc.transact(() => {
-      text.delete(0, text.length);
-      text.insert(0, content);
+      if (deleteCount > 0) text.delete(start, deleteCount);
+      if (insertText) text.insert(start, insertText);
     });
   }, [getDoc]);
 
@@ -49,5 +84,9 @@ export function useYjs() {
     return getDoc(lang).getText("code").toString();
   }, [getDoc]);
 
-  return { getDoc, getText, applyUpdate, encodeUpdate, encodeStateVector, encodeFullState, setContent, getContent };
+  const clearRoomDocs = useCallback(() => {
+    delete docsRef.current[roomId];
+  }, [roomId]);
+
+  return { getDoc, getText, applyUpdate, encodeUpdate, encodeStateVector, encodeFullState, setContent, getContent, clearRoomDocs };
 }
