@@ -1,23 +1,10 @@
 services:
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
-    command: redis-server --appendonly yes
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-
   server:
     build: ./server
     ports:
       - "3001:3001"
     environment:
-      - REDIS_URL=redis://redis:6379
+      - REDIS_URL=redis://192.168.1.101:6379
       - PORT=3001
       - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
       - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
@@ -25,48 +12,11 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - AI_MODEL=${AI_MODEL:-gpt-4o-mini}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
-    depends_on:
-      redis:
-        condition: service_healthy
+      - ADMIN_USERNAME=${ADMIN_USERNAME}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - ADMIN_SESSION_SECRET=${ADMIN_SESSION_SECRET}
     volumes:
       - uploads:/app/uploads
 
-  worker1:
-    build: ./worker
-    environment:
-      - REDIS_URL=redis://redis:6379
-      - SERVER_URL=http://server:3001
-      - WORKER_ID=worker-1
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    depends_on:
-      redis:
-        condition: service_healthy
-
-  worker2:
-    build: ./worker
-    environment:
-      - REDIS_URL=redis://redis:6379
-      - SERVER_URL=http://server:3001
-      - WORKER_ID=worker-2
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    depends_on:
-      redis:
-        condition: service_healthy
-
-  worker3:
-    build: ./worker
-    environment:
-      - REDIS_URL=redis://redis:6379
-      - SERVER_URL=http://server:3001
-      - WORKER_ID=worker-3
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    depends_on:
-      redis:
-        condition: service_healthy
-
 volumes:
-  redis-data:
   uploads:

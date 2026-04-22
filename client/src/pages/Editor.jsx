@@ -8,7 +8,6 @@ import OutputPanel from "../components/OutputPanel.jsx";
 import ChatPanel from "../components/ChatPanel.jsx";
 import UsersSidebar from "../components/UsersSidebar.jsx";
 import AiPanel from "../components/AiPanel.jsx";
-
 import { SERVER_URL } from "../config/server.js";
 
 const SNIPPETS = {
@@ -54,20 +53,11 @@ export default function Editor({ roomCode, userInfo, onLeave }) {
   const cursorLabels = useRef({});
   const runnerRef    = useRef("");
 
-  const yjs = useYjs();
-
-  const seedSnippet = useCallback((l) => {
-    if (yjs.getContent(l) === "") {
-      const before = yjs.encodeStateVector(l);
-      yjs.setContent(l, SNIPPETS[l] || `// Start coding in ${l}...`);
-      const update = yjs.encodeUpdate(l, before);
-      socketRef.current?.emit("yjs:update", { lang: l, update });
-    }
-  }, [yjs]);
+  const yjs = useYjs(roomCode);
 
   // ── Socket setup ─────────────────────────────────────────────────────────
   useEffect(() => {
-    const socket = io(SERVER, { transports: ["websocket"] });
+    const socket = io(SERVER_URL, { transports: ["websocket"] });
     socketRef.current = socket;
 
     socket.on("connect", () => {
@@ -75,6 +65,7 @@ export default function Editor({ roomCode, userInfo, onLeave }) {
       socket.emit("room:join", {
         roomId: roomCode, name: userInfo.name,
         avatarUrl: userInfo.avatarUrl, color: userInfo.color,
+        clientId: userInfo.id,
       });
     });
 
@@ -115,14 +106,10 @@ export default function Editor({ roomCode, userInfo, onLeave }) {
       const txt = yjs.getContent(l);
 
       if (!txt && l === langRef.current) {
-        // Server has no content — seed with snippet
-        const before = yjs.encodeStateVector(l);
-        yjs.setContent(l, SNIPPETS[l] || `// Start coding in ${l}...`);
-        const update = yjs.encodeUpdate(l, before);
-        socketRef.current?.emit("yjs:update", { lang: l, update });
-        const seeded = yjs.getContent(l);
-        editorRef.current?.getModel()?.setValue(seeded);
-        setEditorCode(seeded);
+        // Server has no content yet — show the local fallback only.
+        const fallback = SNIPPETS[l] || `// Start coding in ${l}...`;
+        editorRef.current?.getModel()?.setValue(fallback);
+        setEditorCode(fallback);
       } else if (txt && l === langRef.current && editorRef.current) {
         editorRef.current.getModel()?.setValue(txt);
         setEditorCode(txt);
@@ -164,6 +151,30 @@ export default function Editor({ roomCode, userInfo, onLeave }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const handleLeave = useCallback(() => {
+    const socket = socketRef.current;
+    if (!socket || !socket.connected) {
+      yjs.clearRoomDocs();
+      onLeave?.();
+      return;
+    }
+
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      yjs.clearRoomDocs();
+      onLeave?.();
+    };
+
+    socket.emit("room:leave", { clientId: userInfo?.id }, () => {
+      finish();
+    });
+
+    // Fallback: do not block UI forever if ack is dropped.
+    setTimeout(finish, 400);
+  }, [onLeave, userInfo?.id]);
+
   // ── Language switch ───────────────────────────────────────────────────────
   const handleLangChange = useCallback((newLang) => {
     if (!LANGUAGES.find(l => l.id === newLang)) return;
@@ -172,8 +183,6 @@ export default function Editor({ roomCode, userInfo, onLeave }) {
     }
     langRef.current = newLang;
     setLang(newLang);
-    seedSnippet(newLang);
-
     const content = yjs.getContent(newLang) || SNIPPETS[newLang] || `// Start coding in ${newLang}...`;
     if (editorRef.current) {
       applyingRef.current = true;
@@ -184,7 +193,7 @@ export default function Editor({ roomCode, userInfo, onLeave }) {
 
     socketRef.current?.emit("yjs:request-state", { lang: newLang });
     socketRef.current?.emit("awareness:update", { lang: newLang, typing: false, line: 1 });
-  }, [yjs, seedSnippet]);
+  }, [yjs]);
 
   // ── Editor change ─────────────────────────────────────────────────────────
   const handleEditorChange = useCallback((value) => {
@@ -267,13 +276,13 @@ export default function Editor({ roomCode, userInfo, onLeave }) {
         chatOpen={chatOpen}
         sidebarOpen={sidebarOpen}
         aiOpen={aiOpen}
-        onLeave={onLeave}
+        onLeave={handleLeave}
         userInfo={userInfo}
       />
 
       <div className="flex flex-1 overflow-hidden">
         {sidebarOpen && (
-          <UsersSidebar users={users} currentUserId={socketRef.current?.id} awareness={awareness} theme={theme} />
+          <UsersSidebar users={users} currentUserId={userInfo?.id} awareness={awareness} theme={theme} />
         )}
 
         <div className="flex flex-col flex-1 overflow-hidden min-w-0">
@@ -304,7 +313,7 @@ export default function Editor({ roomCode, userInfo, onLeave }) {
             messages={messages}
             onSend={sendMessage}
             currentUser={userInfo}
-            socketId={socketRef.current?.id}
+            socketId={userInfo?.id}
             theme={theme}
           />
         )}
